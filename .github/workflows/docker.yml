@@ -9,16 +9,28 @@ jobs:
       - name: Check Docker secrets
         id: guard
         run: |
-          if [ -z "${{ secrets.DOCKER_USERNAME }}" ]; then
-            echo "Missing DOCKER_USERNAME secret" >&2
+          U1="${{ secrets.DOCKER_USERNAME }}"
+          U2="${{ secrets.MUSAFIER }}"
+          U3="${{ secrets.musafier }}"
+          if [ -n "$U1" ]; then
+            USERNAME="$U1"
+          elif [ -n "$U2" ]; then
+            USERNAME="$U2"
+          elif [ -n "$U3" ]; then
+            USERNAME="$U3"
+          else
+            echo "No username secret found; set DOCKER_USERNAME or MUSAFIER." >&2
             echo "run_docker=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [ -n "${{ secrets.DOCKER_TOKEN }}" ] || [ -n "${{ secrets.SUBMISSION_MSML }}" ] || [ -n "${{ secrets.submission_msml }}" ]; then
+          T1="${{ secrets.DOCKER_TOKEN }}"
+          T2="${{ secrets.SUBMISSION_MSML }}"
+          T3="${{ secrets.submission_msml }}"
+          if [ -n "$T1" ] || [ -n "$T2" ] || [ -n "$T3" ]; then
             echo "run_docker=true" >> "$GITHUB_OUTPUT"
-            echo "username=${{ secrets.DOCKER_USERNAME }}" >> "$GITHUB_OUTPUT"
+            echo "username=$USERNAME" >> "$GITHUB_OUTPUT"
           else
-            echo "No Docker token found; provide DOCKER_TOKEN or SUBMISSION_MSML/submission_msml." >&2
+            echo "No Docker token found; set DOCKER_TOKEN or SUBMISSION_MSML/submission_msml." >&2
             echo "run_docker=false" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/checkout@v4
