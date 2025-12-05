@@ -29,6 +29,6 @@ jobs:
         with:
           name: model-artifacts
           path: |
-            MLProject/.mlruns/**/artifacts/**
-            MLProject/.mlruns/**/metrics/**
-            MLProject/.mlruns/**/params/**
+            .mlruns/**/artifacts/**
+            .mlruns/**/metrics/**
+            .mlruns/**/params/**
