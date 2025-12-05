@@ -26,6 +26,21 @@ jobs:
           cd MLProject
           export MLFLOW_TRACKING_URI="${GITHUB_WORKSPACE}/MLProject/.mlruns"
           mlflow run . -e train --env-manager=local -P input=namadataset_preprocessing.csv
+      - name: Extract MLmodel path and stage CI artifact
+        run: |
+          set -e
+          mkdir -p MLProject/ci_artifacts
+          MODEL_PATH=$(find MLProject/.mlruns -name MLmodel -type f | head -n 1 || true)
+          if [ -n "$MODEL_PATH" ]; then
+            MODEL_DIR=$(dirname "$MODEL_PATH")
+            echo "Found MLmodel at: $MODEL_PATH"
+            echo "Staging model dir to MLProject/ci_artifacts/model"
+            rm -rf MLProject/ci_artifacts/model
+            cp -r "$MODEL_DIR" MLProject/ci_artifacts/model
+            ls -la MLProject/ci_artifacts/model || true
+          else
+            echo "No MLmodel found under MLProject/.mlruns; continuing with marker only"
+          fi
       - name: List MLflow runs
         run: |
           echo "Root .mlruns:"
@@ -50,6 +65,13 @@ jobs:
             MLProject/.mlruns/**/metrics/**
             MLProject/.mlruns/**/params/**
             MLProject/.mlruns/ARTIFACT_READY.txt
+          if-no-files-found: ignore
+      - name: Upload staged model directory (fallback)
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-artifacts-mlproject
+          path: |
+            MLProject/ci_artifacts/model/**
           if-no-files-found: ignore
 
   

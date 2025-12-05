@@ -120,10 +120,14 @@ jobs:
           mkdir -p MLProject/artifacts_dl
           MODEL_PATH=$(find MLProject/artifacts_dl -name MLmodel -type f | head -n 1)
           if [ -z "$MODEL_PATH" ]; then
-            echo "No MLmodel found in downloaded artifacts" >&2
-            echo "Found files:" >&2
-            find MLProject/artifacts_dl -type f | head -n 200 >&2
-            exit 1
+            echo "No MLmodel found in downloaded artifacts; trying staged fallback" >&2
+            # Some runs upload staged model under ci_artifacts
+            MODEL_PATH=$(find MLProject/artifacts_dl -path '*/ci_artifacts/model/*' -name MLmodel -type f | head -n 1)
+            if [ -z "$MODEL_PATH" ]; then
+              echo "Still no MLmodel. Listing files for debug:" >&2
+              find MLProject/artifacts_dl -type f | head -n 300 >&2
+              exit 1
+            fi
           fi
           MODEL_DIR=$(dirname "$MODEL_PATH")
           echo "model_dir=$MODEL_DIR" >> "$GITHUB_OUTPUT"
