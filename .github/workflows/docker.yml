@@ -60,7 +60,7 @@ jobs:
         if: ${{ steps.guard.outputs.run_docker == 'true' && github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
         run: |
           echo "rid=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
-      - name: Locate latest successful CI Retrain run and artifact
+      - name: Locate latest successful CI Retrain run
         id: locate_run
         if: ${{ steps.guard.outputs.run_docker == 'true' && github.event_name != 'workflow_run' && (inputs.run_id == '' || inputs.run_id == null) }}
         uses: actions/github-script@v7
@@ -68,31 +68,43 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, { owner, repo, per_page: 50 });
-            let chosenRun = null;
-            let chosenArtifact = null;
-            for (const r of runs) {
-              if (r.conclusion !== 'success') continue;
-              if (r.name !== 'CI Retrain') continue;
-              const arts = await github.rest.actions.listWorkflowRunArtifacts({ owner, repo, run_id: r.id, per_page: 50 });
-              const target = arts.data.artifacts.find(a => a.name === 'model-artifacts-mlproject') || arts.data.artifacts[0];
-              if (target && !target.expired && target.size_in_bytes > 0) { chosenRun = r; chosenArtifact = target; break; }
-            }
-            if (!chosenRun || !chosenArtifact) {
-              core.setFailed('No suitable artifacts found on recent CI Retrain runs. Re-run CI Retrain to produce artifacts.');
+            const resp = await github.rest.actions.listWorkflowRuns({ owner, repo, workflow_id: 'ci.yml', per_page: 30 });
+            const runs = resp.data.workflow_runs || [];
+            const chosenRun = runs.find(r => r.conclusion === 'success') || null;
+            if (!chosenRun) {
+              core.setFailed('No successful CI Retrain run found. Please run CI Retrain first.');
               return;
             }
-            core.info(`Chosen run id: ${chosenRun.id}, artifact: ${chosenArtifact.name}`);
+            core.info(`Chosen run id: ${chosenRun.id}`);
             core.setOutput('rid', String(chosenRun.id));
-            core.setOutput('artifact_name', chosenArtifact.name);
+      - name: Locate nearest CI run with artifacts
+        id: locate_with_art
+        if: ${{ steps.guard.outputs.run_docker == 'true' && (inputs.run_id == '' || inputs.run_id == null) }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const resp = await github.rest.actions.listWorkflowRuns({ owner, repo, workflow_id: 'ci.yml', per_page: 50 });
+            const runs = resp.data.workflow_runs || [];
+            let rid = '';
+            for (const r of runs) {
+              if (r.conclusion !== 'success') continue;
+              const arts = await github.rest.actions.listWorkflowRunArtifacts({ owner, repo, run_id: r.id, per_page: 50 });
+              if ((arts.data.artifacts || []).length > 0) { rid = String(r.id); break; }
+            }
+            if (!rid) {
+              core.warning('No artifacts found on recent CI runs. The download step may fail.');
+            }
+            core.setOutput('rid', rid);
       - name: Download model artifact (explicit run-id)
         if: ${{ steps.guard.outputs.run_docker == 'true' }}
         uses: actions/download-artifact@v4
         with:
-          name: ${{ steps.setrunid.outputs.rid != '' && 'model-artifacts-mlproject' || (steps.locate_run.outputs.artifact_name != '' && steps.locate_run.outputs.artifact_name || 'model-artifacts-mlproject') }}
           path: MLProject/artifacts_dl
           repository: ${{ github.repository }}
-          run-id: ${{ steps.setrunid.outputs.rid || steps.locate_run.outputs.rid || inputs.run_id }}
+          run-id: ${{ steps.setrunid.outputs.rid || steps.locate_with_art.outputs.rid || steps.locate_run.outputs.rid || inputs.run_id }}
+          merge-multiple: true
       
       - name: List downloaded artifacts
         if: ${{ steps.guard.outputs.run_docker == 'true' }}
