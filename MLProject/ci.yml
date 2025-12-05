@@ -1,0 +1,48 @@
+name: CI Retrain + Docker
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'MLProject/**'
+      - '.github/workflows/ci.yml'
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install MLflow Project deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install mlflow
+      - name: List repo
+        run: |
+          ls -la
+          ls -la MLProject
+      - name: Run MLflow Project
+        run: |
+          mlflow run MLProject -e train -P input=MLProject/namadataset_preprocessing.csv
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-artifacts
+          path: |
+            MLProject/.mlruns/**/artifacts/**
+            MLProject/.mlruns/**/metrics/**
+            MLProject/.mlruns/**/params/**
+  docker:
+    needs: retrain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install MLflow
+        run: python -m pip install mlflow
+      - name: Find latest run ID
+        id: findrun
+        run: |
+          python - << 'PY'

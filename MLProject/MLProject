@@ -1,0 +1,7 @@
+name: workflow-ci-project
+conda_env: conda.yaml
+entry_points:
+  train:
+    parameters:
+      input: {type: path, default: MLProject/namadataset_preprocessing.csv}
+    command: "python modelling.py --input {input}"
