@@ -23,12 +23,21 @@ jobs:
           ls -la MLProject
       - name: Run MLflow Project (env-manager=local)
         run: |
-          mlflow run MLProject -e train -P input=MLProject/namadataset_preprocessing.csv --env-manager=local
+          cd MLProject
+          mlflow run . -e train -P input=MLProject/namadataset_preprocessing.csv --env-manager=local
+      - name: List MLflow runs
+        run: |
+          echo "Root .mlruns:"
+          ls -la .mlruns || true
+          echo "MLProject .mlruns:"
+          ls -la MLProject/.mlruns || true
+          echo "Find files in MLProject/.mlruns:"
+          find MLProject/.mlruns -type f | head -n 200 || true
       - name: Upload run artifacts
         uses: actions/upload-artifact@v4
         with:
           name: model-artifacts
           path: |
-            .mlruns/**/artifacts/**
-            .mlruns/**/metrics/**
-            .mlruns/**/params/**
+            MLProject/.mlruns/**/artifacts/**
+            MLProject/.mlruns/**/metrics/**
+            MLProject/.mlruns/**/params/**
