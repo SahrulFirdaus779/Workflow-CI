@@ -36,6 +36,11 @@ jobs:
           find MLProject/.mlruns -type f | head -n 200 || true
           echo "Find files in root .mlruns:"
           find .mlruns -type f | head -n 200 || true
+      - name: Ensure artifact directory and marker exists
+        run: |
+          mkdir -p MLProject/.mlruns
+          echo "artifact generated at $(date -u)" > MLProject/.mlruns/ARTIFACT_READY.txt
+          ls -la MLProject/.mlruns
       - name: Upload run artifacts from MLProject/.mlruns
         uses: actions/upload-artifact@v4
         with:
@@ -44,6 +49,7 @@ jobs:
             MLProject/.mlruns/**/artifacts/**
             MLProject/.mlruns/**/metrics/**
             MLProject/.mlruns/**/params/**
+            MLProject/.mlruns/ARTIFACT_READY.txt
           if-no-files-found: ignore
 
   
