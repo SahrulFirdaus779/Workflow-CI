@@ -1,6 +1,14 @@
 name: Docker Build & Push
 on:
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID dari retrain CI yang meng-upload artifact"
+        required: false
+        default: ""
+  workflow_run:
+    workflows: ["CI Retrain"]
+    types: [completed]
 
 jobs:
   build_push:
@@ -44,12 +52,30 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install mlflow
+      - name: Set run-id from workflow_run (if available)
+        id: setrunid
+        if: ${{ steps.guard.outputs.run_docker == 'true' && github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
+        run: |
+          echo "rid=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
       - name: Download latest model artifact from retrain workflow
         if: ${{ steps.guard.outputs.run_docker == 'true' }}
         uses: actions/download-artifact@v4
         with:
           name: model-artifacts-mlproject
           path: MLProject/artifacts_dl
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.setrunid.outputs.rid || inputs.run_id }}
+      - name: Fallback download (tanpa run-id)
+        if: ${{ steps.guard.outputs.run_docker == 'true' && inputs.run_id == '' }}
+        uses: actions/download-artifact@v4
+        with:
+          path: MLProject/artifacts_dl
+          merge-multiple: true
+      - name: List downloaded artifacts
+        if: ${{ steps.guard.outputs.run_docker == 'true' }}
+        run: |
+          echo "Artifacts under MLProject/artifacts_dl:" && ls -la MLProject/artifacts_dl || true
+          echo "All files:" && find MLProject/artifacts_dl -type f | head -n 200 || true
       - name: Locate MLflow model directory
         id: locate
         if: ${{ steps.guard.outputs.run_docker == 'true' }}
