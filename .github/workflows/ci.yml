@@ -24,7 +24,7 @@ jobs:
       - name: Run MLflow Project (env-manager=local)
         run: |
           cd MLProject
-          mlflow run . -e train -P input=MLProject/namadataset_preprocessing.csv --env-manager=local
+          mlflow run . -e train --env-manager=local -P input=namadataset_preprocessing.csv
       - name: List MLflow runs
         run: |
           echo "Root .mlruns:"
@@ -33,11 +33,20 @@ jobs:
           ls -la MLProject/.mlruns || true
           echo "Find files in MLProject/.mlruns:"
           find MLProject/.mlruns -type f | head -n 200 || true
-      - name: Upload run artifacts
+          echo "Find files in root .mlruns:"
+          find .mlruns -type f | head -n 200 || true
+      - name: Upload run artifacts from MLProject/.mlruns
         uses: actions/upload-artifact@v4
         with:
-          name: model-artifacts
+          name: model-artifacts-mlproject
           path: |
-            MLProject/.mlruns/**/artifacts/**
-            MLProject/.mlruns/**/metrics/**
-            MLProject/.mlruns/**/params/**
+            MLProject/.mlruns/**
+          if-no-files-found: warn
+
+      - name: Upload run artifacts from repo-root .mlruns
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-artifacts-root
+          path: |
+            .mlruns/**
+          if-no-files-found: warn
