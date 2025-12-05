@@ -12,6 +12,9 @@ on:
 
 jobs:
   build_push:
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - name: Check Docker secrets
@@ -65,16 +68,23 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            // Find latest successful run for ci.yml
-            const runs = await github.rest.actions.listWorkflowRuns({ owner, repo, workflow_id: 'ci.yml', per_page: 20 });
-            const okRun = runs.data.workflow_runs.find(r => r.conclusion === 'success');
-            core.info(`Chosen run id: ${okRun ? okRun.id : 'none'}`);
-            if (!okRun) { core.setFailed('No successful CI Retrain run found.'); return; }
-            const arts = await github.rest.actions.listWorkflowRunArtifacts({ owner, repo, run_id: okRun.id, per_page: 50 });
-            const target = arts.data.artifacts.find(a => a.name === 'model-artifacts-mlproject') || arts.data.artifacts[0];
-            if (!target) { core.setFailed('No artifacts found on the latest CI run.'); return; }
-            core.setOutput('rid', String(okRun.id));
-            core.setOutput('artifact_name', target.name);
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, { owner, repo, per_page: 50 });
+            let chosenRun = null;
+            let chosenArtifact = null;
+            for (const r of runs) {
+              if (r.conclusion !== 'success') continue;
+              if (r.name !== 'CI Retrain') continue;
+              const arts = await github.rest.actions.listWorkflowRunArtifacts({ owner, repo, run_id: r.id, per_page: 50 });
+              const target = arts.data.artifacts.find(a => a.name === 'model-artifacts-mlproject') || arts.data.artifacts[0];
+              if (target && !target.expired && target.size_in_bytes > 0) { chosenRun = r; chosenArtifact = target; break; }
+            }
+            if (!chosenRun || !chosenArtifact) {
+              core.setFailed('No suitable artifacts found on recent CI Retrain runs. Re-run CI Retrain to produce artifacts.');
+              return;
+            }
+            core.info(`Chosen run id: ${chosenRun.id}, artifact: ${chosenArtifact.name}`);
+            core.setOutput('rid', String(chosenRun.id));
+            core.setOutput('artifact_name', chosenArtifact.name);
       - name: Download model artifact (explicit run-id)
         if: ${{ steps.guard.outputs.run_docker == 'true' }}
         uses: actions/download-artifact@v4
