@@ -24,6 +24,7 @@ jobs:
       - name: Run MLflow Project (env-manager=local)
         run: |
           cd MLProject
+          export MLFLOW_TRACKING_URI="${GITHUB_WORKSPACE}/MLProject/.mlruns"
           mlflow run . -e train --env-manager=local -P input=namadataset_preprocessing.csv
       - name: List MLflow runs
         run: |
@@ -43,10 +44,4 @@ jobs:
             MLProject/.mlruns/**
           if-no-files-found: warn
 
-      - name: Upload run artifacts from repo-root .mlruns
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-artifacts-root
-          path: |
-            .mlruns/**
-          if-no-files-found: warn
+      # Root .mlruns should be empty since we force tracking URI
