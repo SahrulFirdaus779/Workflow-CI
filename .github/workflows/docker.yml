@@ -57,20 +57,33 @@ jobs:
         if: ${{ steps.guard.outputs.run_docker == 'true' && github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
         run: |
           echo "rid=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
-      - name: Download latest model artifact from retrain workflow
+      - name: Locate latest successful CI Retrain run and artifact
+        id: locate_run
+        if: ${{ steps.guard.outputs.run_docker == 'true' && github.event_name != 'workflow_run' && (inputs.run_id == '' || inputs.run_id == null) }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            // Find latest successful run for ci.yml
+            const runs = await github.rest.actions.listWorkflowRuns({ owner, repo, workflow_id: 'ci.yml', per_page: 20 });
+            const okRun = runs.data.workflow_runs.find(r => r.conclusion === 'success');
+            core.info(`Chosen run id: ${okRun ? okRun.id : 'none'}`);
+            if (!okRun) { core.setFailed('No successful CI Retrain run found.'); return; }
+            const arts = await github.rest.actions.listWorkflowRunArtifacts({ owner, repo, run_id: okRun.id, per_page: 50 });
+            const target = arts.data.artifacts.find(a => a.name === 'model-artifacts-mlproject') || arts.data.artifacts[0];
+            if (!target) { core.setFailed('No artifacts found on the latest CI run.'); return; }
+            core.setOutput('rid', String(okRun.id));
+            core.setOutput('artifact_name', target.name);
+      - name: Download model artifact (explicit run-id)
         if: ${{ steps.guard.outputs.run_docker == 'true' }}
         uses: actions/download-artifact@v4
         with:
-          name: model-artifacts-mlproject
+          name: ${{ steps.setrunid.outputs.rid != '' && 'model-artifacts-mlproject' || (steps.locate_run.outputs.artifact_name != '' && steps.locate_run.outputs.artifact_name || 'model-artifacts-mlproject') }}
           path: MLProject/artifacts_dl
           repository: ${{ github.repository }}
-          run-id: ${{ steps.setrunid.outputs.rid || inputs.run_id }}
-      - name: Fallback download (tanpa run-id)
-        if: ${{ steps.guard.outputs.run_docker == 'true' && inputs.run_id == '' }}
-        uses: actions/download-artifact@v4
-        with:
-          path: MLProject/artifacts_dl
-          merge-multiple: true
+          run-id: ${{ steps.setrunid.outputs.rid || steps.locate_run.outputs.rid || inputs.run_id }}
+      
       - name: List downloaded artifacts
         if: ${{ steps.guard.outputs.run_docker == 'true' }}
         run: |
